@@ -1,60 +1,275 @@
-<html>
-    <head>
-        <title>Sandcat | 54ndc47</title>
-        <link rel="shortcut icon" type="image/png" href="/gui/img/favicon.png"/>
-        <link rel="stylesheet" href="/gui/css/shared.css">
-        <link rel="stylesheet" href="/gui/css/navbar.css">
-        <link rel="stylesheet" href="/proxy/css/basic.css">
-    </head>
-    <body style="margin-bottom: 100px">
-        <div class="topnav">
-          <a href="/">Home</a>
-          <a href="/plugin/proxy/gui" class="active">Proxy</a>
-          <div class="topnav-right">
-            <a href="/logout">Logout</a>
-          </div>
-        </div>
-        <div class="column" style="flex:100%; margin-top: 0;">
-            <center>
-                <div class="row-canvas">
-                    <div class="section-profile" style="display:block;">
-                        <div class="row">
-                            <div class="column section-border" style="flex: 25%;">
-                                    <div class="proxy" style="">
-                                        <img src="/proxy/img/redirect.png">
-                                        <h4 style="margin-bottom:-5px">Build Reverse Proxy</h4>
-                                        <p>Set reverse proxy configuration and launch a new proxy service</p>
-                                        <select id="proxy_name" name="proxy_name" >
-                                            <option disabled selected>Select a proxy type</option>
-                                            {% for p in proxy_types %}
-                                            <option id="{{ p }}" value="{{ p }}">{{ p }}</option>  {% endfor %}
-                                           <option id="{{ p }}" value="{{ p }}">{{ p }}</option>
-                                        </select>
-                                        <input id="cert_path" name="cert_path" placeholder="Provide a /path/to/cert_key.pem file (Default: plugins/proxy/conf/ssl_cert.pem)">
-                                        <input id="http_port" name="http_port" placeholder="Provide an http port (Default: 80)">
-                                        <input id="https_port" name="https_port" placeholder="Provide an https port (Default: 443)">
-                                        <input id="caldera_ip" name="caldera_ip" placeholder="Provide the IP address of caldera server (Default: localhost)">
-                                        <input id="caldera_port" name="caldera_port" placeholder="Provide the port caldera server is running on (Default: 8888)">
-                                        <select id="launch_proxy" name="launch_proxy">
-                                            <option disabled selected>Launch proxy?</option>
-                                            <option value="True">Render Config and Launch</option>
-                                            <option value="False">Just Render Config</option>
-                                        </select>
-                                        <button id="proxy_config_submit" class="button-success atomic-button" onclick="createProxy();">Create Reverse Proxy</button>
-                                        <div class="flashy">
-                                            <div id="flash-proxy-bar"></div>
-                                        </div>
-                                    </div>
-                            </div>
-                            <div class="column" style="flex: 75%;">
-                                <pre id="proxy_config"></pre>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </center>
-        </div>
-    </body>
-    <script src="/gui/jquery/jquery.js"></script>
-    <script src="/proxy/js/proxy.js"></script>
-</html>
+const target = {
+  message1: "hello",
+  message2: "everyone",
+};
+
+const handler1 = {};
+
+const proxy1 = new Proxy(target, handler1)
+console.log(proxy1.message1); // hello
+console.log(proxy1.message2); // everyone
+const target = {
+  message1: "hello",
+  message2: "everyone",
+};
+
+const handler2 = {
+  get(target, prop, receiver) {
+    return "world";
+  },
+};
+
+const proxy2 = new Proxy(target, handler2);
+console.log(proxy2.message1); // world
+console.log(proxy2.message2); // world
+const target = {
+  message1: "hello",
+  message2: "everyone",
+  };
+  const handler3 = {
+  get(target, prop, receiver) {
+    if (prop === "message2") {
+      return "world";
+    }
+    return Reflect.get(...arguments);
+  },
+};
+
+const proxy3 = new Proxy(target, handler3);
+
+console.log(proxy3.message1); // hello
+console.log(proxy3.message2); // world
+const handler = {
+  get(obj, prop) {
+    return prop in obj ? obj[prop] : 37;
+  },
+};
+
+const p = new Proxy({}, handler);
+p.a = 1;
+p.b = undefined;
+
+console.log(p.a, p.b); // 1, undefined
+
+console.log("c" in p, p.c); // false, 37
+const target = {};
+const p = new Proxy(target, {});
+
+p.a = 37; // Operation forwarded to the target
+
+console.log(target.a); // 37 (The operation has been properly forwarded!)
+class Secret {
+  #secret;
+  constructor(secret) {
+    this.#secret = secret;
+  }
+  get secret() {
+    return this.#secret.replace(/\d+/, "[REDACTED]");
+  }
+}
+
+const aSecret = new Secret("123456");
+console.log(aSecret.secret); // [REDACTED]
+// Looks like a no-op forwarding...
+const proxy = new Proxy(aSecret, {});
+console.log(proxy.secret); // TypeError: Cannot read private member #secret from an object whose class did not declare it
+const proxy = new Proxy(aSecret, {
+  get(target, prop, receiver) {
+    // By default, it looks like Reflect.get(target, prop, receiver)
+    // which has a different value of `this`
+    return target[prop];
+  },
+});
+console.log(proxy.secret);
+class Secret {
+  #x = 1;
+  x() {
+    return this.#x;
+  }
+}
+
+const aSecret = new Secret();
+const proxy = new Proxy(aSecret, {
+  get(target, prop, receiver) {
+    const value = target[prop];
+    if (value instanceof Function) {
+      return function (...args) {
+        return value.apply(this === receiver ? target : this, args);
+      };
+    }
+    return value;
+  },
+});
+console.log(proxy.x());
+const validator = {
+  set(obj, prop, value) {
+    if (prop === "age") {
+      if (!Number.isInteger(value)) {
+        throw new TypeError("The age is not an integer");
+      }
+      if (value > 200) {
+        throw new RangeError("The age seems invalid");
+      }
+    }
+
+    // The default behavior to store the value
+    obj[prop] = value;
+
+    // Indicate success
+    return true;
+  },
+};
+
+const person = new Proxy({}, validator);
+
+person.age = 100;
+console.log(person.age); // 100
+person.age = "young"; // Throws an exception
+person.age = 300; // Throws an exception
+const view = new Proxy(
+  {
+    selected: null,
+  },
+  {
+    set(obj, prop, newVal) {
+      const oldVal = obj[prop];
+
+      if (prop === "selected") {
+        if (oldVal) {
+          oldVal.setAttribute("aria-selected", "false");
+        }
+        if (newVal) {
+          newVal.setAttribute("aria-selected", "true");
+        }
+      }
+
+      // The default behavior to store the value
+      obj[prop] = newVal;
+
+      // Indicate success
+      return true;
+    },
+  },
+);
+
+const item1 = document.getElementById("item-1");
+const item2 = document.getElementById("item-2");
+
+// select item1:
+view.selected = item1;
+
+console.log(`item1: ${item1.getAttribute("aria-selected")}`);
+// item1: true
+
+// selecting item2 de-selects item1:
+view.selected = item2;
+
+console.log(`item1: ${item1.getAttribute("aria-selected")}`);
+// item1: false
+
+console.log(`item2: ${item2.getAttribute("aria-selected")}`);
+// item2: true
+const products = new Proxy(
+  {
+    browsers: ["Firefox", "Chrome"],
+  },
+  {
+    get(obj, prop) {
+      // An extra property
+      if (prop === "latestBrowser") {
+        return obj.browsers[obj.browsers.length - 1];
+      }
+
+      // The default behavior to return the value
+      return obj[prop];
+    },
+    set(obj, prop, value) {
+      // An extra property
+      if (prop === "latestBrowser") {
+        obj.browsers.push(value);
+        return true;
+      }
+
+      // Convert the value if it is not an array
+      if (typeof value === "string") {
+        value = [value];
+      }
+
+      // The default behavior to store the value
+      obj[prop] = value;
+
+      // Indicate success
+      return true;
+    },
+  },
+);
+
+console.log(products.browsers);
+//  ['Firefox', 'Chrome']
+
+products.browsers = "Safari";
+//  pass a string (by mistake)
+
+console.log(products.browsers);
+//  ['Safari'] <- no problem, the value is an array
+
+products.latestBrowser = "Edge";
+
+console.log(products.browsers);
+//  ['Safari', 'Edge']
+
+console.log(products.latestBrowser);
+//  'Edge'
+/*
+  const docCookies = ... get the "docCookies" object here:
+  https://reference.codeproject.com/dom/document/cookie/simple_document.cookie_framework
+*/
+
+const docCookies = new Proxy(docCookies, {
+  get(target, key) {
+    return target[key] ?? target.getItem(key) ?? undefined;
+  },
+  set(target, key, value) {
+    if (key in target) {
+      return false;
+    }
+    return target.setItem(key, value);
+  },
+  deleteProperty(target, key) {
+    if (!(key in target)) {
+      return false;
+    }
+    return target.removeItem(key);
+  },
+  ownKeys(target) {
+    return target.keys();
+  },
+  has(target, key) {
+    return key in target || target.hasItem(key);
+  },
+  defineProperty(target, key, descriptor) {
+    if (descriptor && "value" in descriptor) {
+      target.setItem(key, descriptor.value);
+    }
+    return target;
+  },
+  getOwnPropertyDescriptor(target, key) {
+    const value = target.getItem(key);
+    return value
+      ? {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: false,
+        }
+      : undefined;
+  },
+});
+
+/* Cookies test */
+
+console.log((docCookies.myCookie1 = "First value"));
+console.log(docCookies.getItem("myCookie1"));
+
+docCookies.setItem("myCookie1", "Changed value");
+console.log(docCookies.myCookie1);
